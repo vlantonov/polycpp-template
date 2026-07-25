@@ -12,10 +12,8 @@ permissions:
 
 env:
   SCCACHE_GHA_ENABLED: "true"
-  # Treat GHA cache storage errors as cache-misses instead of fatal failures.
-  # This prevents sccache from crashing the build when the cache backend is
-  # temporarily unavailable (e.g. HTTP 400 from artifactcache.actions.githubusercontent.com).
   SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+  SCCACHE_STARTUP_TIMEOUT: "60"
 
 jobs:
   build:
@@ -40,7 +38,14 @@ jobs:
         run: conan profile detect --force
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Verify sccache daemon (fallback to local cache)
+        run: |
+          if ! sccache --show-stats > /dev/null 2>&1; then
+            echo "sccache daemon not running, restarting with local cache"
+            SCCACHE_GHA_ENABLED=false sccache --start-server || true
+          fi
 
       - name: Cache Conan packages
         uses: actions/cache@v4
