@@ -67,3 +67,16 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# --- polycpp-template additions ---
+# Conan 2
+CMakeUserPresets.json
+.conan2/
+# CPack output
+_CPack_Packages/
+*.deb
+*.rpm
+# sccache local
+.sccache/
+# tooling caches
+.cache/clangd/
