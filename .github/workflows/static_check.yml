@@ -73,10 +73,37 @@ jobs:
 
       - name: Start sccache server
         run: |
-          if ! sccache --start-server; then
-            echo "SCCACHE_DISABLED=true" >> "$GITHUB_ENV"
+          if sccache --start-server; then
+            echo "SCCACHE_C_LAUNCHER=sccache"   >> "$GITHUB_ENV"
+            echo "SCCACHE_CXX_LAUNCHER=sccache" >> "$GITHUB_ENV"
+          else
+            echo "SCCACHE_C_LAUNCHER="   >> "$GITHUB_ENV"
+            echo "SCCACHE_CXX_LAUNCHER=" >> "$GITHUB_ENV"
             echo "::warning::sccache server failed to start (GHA cache unavailable), building without cache"
           fi
+
+      - name: Configure (gcc)
+        if: matrix.compiler == 'gcc'
+        run: |
+          cmake -S . -B build/Release -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+            ${{ env.SCCACHE_C_LAUNCHER   != '' && format('-DCMAKE_C_COMPILER_LAUNCHER={0}',   env.SCCACHE_C_LAUNCHER)   || '' }} \
+            ${{ env.SCCACHE_CXX_LAUNCHER != '' && format('-DCMAKE_CXX_COMPILER_LAUNCHER={0}', env.SCCACHE_CXX_LAUNCHER) || '' }}
+
+      - name: Configure (clang)
+        if: matrix.compiler == 'clang'
+        run: |
+          cmake -S . -B build/Release -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            ${{ env.SCCACHE_C_LAUNCHER   != '' && format('-DCMAKE_C_COMPILER_LAUNCHER={0}',   env.SCCACHE_C_LAUNCHER)   || '' }} \
+            ${{ env.SCCACHE_CXX_LAUNCHER != '' && format('-DCMAKE_CXX_COMPILER_LAUNCHER={0}', env.SCCACHE_CXX_LAUNCHER) || '' }}
+
 
       - name: Cache Conan packages
         uses: actions/cache@v4
