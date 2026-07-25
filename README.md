@@ -4,7 +4,33 @@ polycpp-template is a reusable monorepo template for orchestrating multiple C++ 
 
 ## Status
 
-TBD - CI badges and project health indicators will be added in later steps.
+| Workflow | Badge |
+| --- | --- |
+| Ubuntu | ![ubuntu](https://github.com/vlantonov/polycpp-template/actions/workflows/ubuntu.yml/badge.svg) |
+| macOS | ![macos](https://github.com/vlantonov/polycpp-template/actions/workflows/macos.yml/badge.svg) |
+| Windows | ![windows](https://github.com/vlantonov/polycpp-template/actions/workflows/windows.yml/badge.svg) |
+| Sanitizers | ![sanitizers](https://github.com/vlantonov/polycpp-template/actions/workflows/sanitizers.yml/badge.svg) |
+| Static analysis | ![static-check](https://github.com/vlantonov/polycpp-template/actions/workflows/static_check.yml/badge.svg) |
+
+3 unit + integration tests across 2 example subprojects; requires CMake >= 3.25, Conan >= 2.0, Python >= 3.10.
+
+## Quickstart
+
+```bash
+git clone https://github.com/vlantonov/polycpp-template.git my-project
+cd my-project
+mkdir build && cd build
+conan install .. --build=missing -pr:b=default -s build_type=Release
+cd ..
+cmake --preset conan-release -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+cmake --build build/Release
+ctest --test-dir build/Release --output-on-failure
+```
+
+To add your own subproject, create a new `projects/<name>/` directory with its
+own target(s), tests, and install rules.
+Follow the checklist in [docs/adding-subproject.md](docs/adding-subproject.md)
+to wire it into the root orchestrator and CPack metadata consistently.
 
 ## Supported platforms
 
@@ -16,7 +42,9 @@ TBD - CI badges and project health indicators will be added in later steps.
 
 ## Architecture
 
-TBD - This template follows a `projects/<name>/` monorepo model where the root CMake file orchestrates subprojects and each subproject can publish its own CPack components.
+This template follows a `projects/<name>/` monorepo model where the root CMake
+file orchestrates subprojects and each subproject can publish its own CPack
+components.
 
 ## Dependencies
 
@@ -74,3 +102,19 @@ For a reproducible local environment, use [docs/docker-dev.md](docs/docker-dev.m
 The [Dockerfile.dev](Dockerfile.dev) image is based on Ubuntu 24.04 and ships
 with CMake, Conan 2, sccache, clang-format, clang-tidy, cppcheck, rpmbuild,
 and dpkg-dev preinstalled for CI-aligned local development.
+
+## Reusing this template
+
+When turning this template into a project-specific monorepo, start with
+[docs/adding-subproject.md](docs/adding-subproject.md) and keep naming
+consistent across build, packaging, and CI metadata.
+Rename the `polycpp` token to your project token in the root `CMakeLists.txt`
+(`project(...)` call and `POLYCPP_*` cache-option prefix), update dependencies
+in `conanfile.txt`, and refresh `.github/workflows/*` references such as badge
+URLs and package naming used by CPack outputs.
+Also update maintainer metadata in `cmake/Packaging.cmake`
+(`CPACK_PACKAGE_VENDOR` and `CPACK_PACKAGE_CONTACT`) before your first release.
+
+## License
+
+Released under the [MIT License](LICENSE).
