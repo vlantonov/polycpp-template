@@ -1,0 +1,106 @@
+name: Static Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format-18
+
+      - name: Check formatting
+        run: git ls-files '*.cpp' '*.hpp' '*.c' '*.h' | xargs -r clang-format-18 --dry-run --Werror
+
+  cppcheck:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cppcheck
+
+      - name: Run cppcheck
+        run: |
+          find projects -type d \( -name include -o -name src -o -name tests \) -print0 |
+            xargs -0 cppcheck --enable=warning,style,performance,portability \
+              --error-exitcode=1 --suppress=missingIncludeSystem --inline-suppr
+
+  clang-tidy:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build clang clang-tidy
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Conan
+        run: pip install "conan>=2.0,<3"
+
+      - name: Detect Conan profile
+        run: conan profile detect --force
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: ${{ runner.os }}-clang-conan-${{ hashFiles('conanfile.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-clang-conan-
+
+      - name: Conan install
+        run: |
+          mkdir -p build
+          cd build
+          conan install .. --build=missing -pr:b=default -s build_type=Release
+
+      - name: Configure
+        run: |
+          cmake --preset conan-release \
+            -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+            -DPOLYCPP_ENABLE_CLANG_TIDY=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build
+        run: cmake --build build/Release
+
+      - name: Test
+        run: ctest --test-dir build/Release --output-on-failure
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats
