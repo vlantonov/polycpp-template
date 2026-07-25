@@ -27,15 +27,46 @@ TBD - This template follows a `projects/<name>/` monorepo model where the root C
 
 ## Build
 
-TBD - filled in by later steps.
+From the repository root:
+
+```bash
+mkdir -p build && cd build
+conan install .. --build=missing -pr:b=default -s build_type=Release
+cd ..
+cmake --preset conan-release
+cmake --build build/Release
+```
+
+For CI-strict local verification, configure with clang and warnings-as-errors:
+
+```bash
+cmake --preset conan-release \
+	-DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+	-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build/Release
+```
 
 ## Test
 
-TBD - filled in by later steps.
+Run all discovered tests with CTest:
+
+```bash
+ctest --test-dir build/Release --output-on-failure
+```
 
 ## Packaging
 
-TBD - filled in by later steps.
+Linux packaging is enabled via `POLYCPP_ENABLE_PACKAGING` and produces
+component-split packages. DEB names are `polycpp-hello-lib`,
+`polycpp-hello-lib-dev`, and `polycpp-hello-app`; RPM uses the same names with
+`polycpp-hello-lib-devel` for the development component.
+
+Generate packages from the configured build tree:
+
+```bash
+cd build/Release
+cpack -G "DEB;RPM"
+```
 
 ## Docker dev environment
 
