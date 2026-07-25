@@ -1,5 +1,4 @@
 #include <hello_lib/greeter.hpp>
-
 #include <iostream>
 #include <string>
 

@@ -1,7 +1,6 @@
-#include <hello_lib/greeter.hpp>
-
 #include <spdlog/spdlog.h>
 
+#include <hello_lib/greeter.hpp>
 #include <string>
 
 namespace polycpp::hello_lib {
