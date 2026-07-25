@@ -12,10 +12,8 @@ permissions:
 
 env:
   SCCACHE_GHA_ENABLED: "true"
-  # Treat GHA cache storage errors as cache-misses instead of fatal failures.
-  # Prevents sccache from crashing the build when the cache backend is
-  # temporarily unavailable (e.g. HTTP 400 from artifactcache.actions.githubusercontent.com).
   SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+  SCCACHE_STARTUP_TIMEOUT: "60"
 
 jobs:
   build:
@@ -37,7 +35,7 @@ jobs:
         run: conan profile detect --force
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -47,27 +45,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-default-conan-
 
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Conan install
         shell: pwsh
         run: |
-          conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release -s compiler.cppstd=20
+          conan install . `
+            --output-folder=build/Release `
+            --build=missing `
+            -pr:b=default `
+            -s build_type=Release `
+            -s compiler.cppstd=20
 
       - name: Configure
         shell: pwsh
         run: |
           cmake -S . -B build/Release -G Ninja `
-            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake `
+            "-DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake" `
             -DCMAKE_BUILD_TYPE=Release `
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON `
             -DCMAKE_C_COMPILER_LAUNCHER=sccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build
+        shell: pwsh
         run: cmake --build build/Release
 
       - name: Test
+        shell: pwsh
         run: ctest --test-dir build/Release --output-on-failure
 
       - name: sccache stats
         if: always()
-        run: sccache --show-stats
+        shell: pwsh
+        run: sccache --show-stats || true
