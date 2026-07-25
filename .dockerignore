@@ -1,0 +1,17 @@
+.git
+.github
+build/
+build-*/
+CMakeUserPresets.json
+.conan2/
+.conan2_local/
+.venv-conan/
+.sccache/
+_CPack_Packages/
+*.deb
+*.rpm
+*.log
+.cache/
+.vscode/
+.idea/
+.devcontainer/

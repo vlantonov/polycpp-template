@@ -72,6 +72,8 @@ Testing/
 # Conan 2
 CMakeUserPresets.json
 .conan2/
+.conan2_local/
+.venv-conan/
 # CPack output
 _CPack_Packages/
 *.deb

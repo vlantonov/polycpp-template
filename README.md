@@ -70,4 +70,7 @@ cpack -G "DEB;RPM"
 
 ## Docker dev environment
 
-TBD - filled in by later steps.
+For a reproducible local environment, use [docs/docker-dev.md](docs/docker-dev.md).
+The [Dockerfile.dev](Dockerfile.dev) image is based on Ubuntu 24.04 and ships
+with CMake, Conan 2, sccache, clang-format, clang-tidy, cppcheck, rpmbuild,
+and dpkg-dev preinstalled for CI-aligned local development.

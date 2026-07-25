@@ -1,0 +1,44 @@
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build make \
+    gcc g++ clang clang-tidy clang-format \
+    cppcheck \
+    git curl ca-certificates file \
+    python3 python3-pip python3-venv \
+    rpm dpkg-dev \
+    pkg-config \
+    sudo \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN cmake --version | awk 'NR==1{print $3}' | awk -F. '{ if ($1*100+$2 < 325) exit 1 }'
+
+RUN python3 -m venv /opt/conan-venv \
+ && /opt/conan-venv/bin/pip install --no-cache-dir 'conan>=2.0,<3'
+ENV PATH="/opt/conan-venv/bin:${PATH}"
+
+RUN curl -fL -o /tmp/sccache.tar.gz \
+      https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/sccache.tar.gz -C /tmp \
+ && cp /tmp/sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
+ && chmod +x /usr/local/bin/sccache \
+ && /usr/local/bin/sccache --version \
+ && rm -rf /tmp/sccache.tar.gz /tmp/sccache-v0.8.2-x86_64-unknown-linux-musl
+
+RUN existing_user="$(getent passwd 1000 | cut -d: -f1 || true)" \
+ && existing_group="$(getent group 1000 | cut -d: -f1 || true)" \
+ && if [ -n "$existing_group" ] && [ "$existing_group" != "dev" ]; then groupmod -n dev "$existing_group"; elif [ -z "$existing_group" ]; then groupadd -g 1000 dev; fi \
+ && if [ -n "$existing_user" ] && [ "$existing_user" != "dev" ]; then usermod -l dev -d /home/dev -m "$existing_user"; elif [ -z "$existing_user" ]; then useradd -m -u 1000 -g 1000 -s /bin/bash dev; fi \
+ && usermod -aG sudo dev \
+ && echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev \
+ && chmod 0440 /etc/sudoers.d/dev
+
+USER dev
+WORKDIR /workspace
+
+RUN conan profile detect --force
+
+CMD ["/bin/bash"]
