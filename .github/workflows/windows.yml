@@ -29,6 +29,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Ninja
+        run: choco install ninja --yes
+
       - name: Install Conan
         run: python -m pip install "conan>=2.0,<3"
 
@@ -50,9 +53,7 @@ jobs:
       - name: Conan install
         shell: bash
         run: |
-          mkdir -p build
-          cd build
-          conan install .. --build=missing -pr:b=default -s build_type=Release
+          conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
 
       - name: List CMake presets (diagnostic)
         shell: bash
@@ -63,6 +64,7 @@ jobs:
         run: |
           cmake -S . -B build/Release -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_DEFAULT_CMP0091=NEW \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache

@@ -64,6 +64,7 @@ jobs:
         run: |
           cmake -S . -B build/Release -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
@@ -73,6 +74,7 @@ jobs:
         run: |
           cmake -S . -B build/Release -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \

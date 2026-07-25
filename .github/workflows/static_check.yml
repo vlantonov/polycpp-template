@@ -92,6 +92,7 @@ jobs:
         run: |
           cmake -S . -B build/Release -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
             -DPOLYCPP_ENABLE_CLANG_TIDY=ON \
             -DCMAKE_C_COMPILER=clang \
