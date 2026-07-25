@@ -12,6 +12,10 @@ permissions:
 
 env:
   SCCACHE_GHA_ENABLED: "true"
+  # Treat GHA cache storage errors as cache-misses instead of fatal failures.
+  # This prevents sccache from crashing the build when the cache backend is
+  # temporarily unavailable (e.g. HTTP 400 from artifactcache.actions.githubusercontent.com).
+  SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
 
 jobs:
   build:
@@ -38,20 +42,6 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.7
 
-      # FIX 1: Health-check the cache backend, not just the server process.
-      # sccache --start-server exits 0 even when the GHA cache storage is
-      # broken. Probe with --show-stats (which actually exercises the backend)
-      # and disable the launchers if it fails.
-      - name: Start sccache server
-        run: |
-          if sccache --start-server && sccache --show-stats > /dev/null 2>&1; then
-            echo "SCCACHE_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          else
-            sccache --stop-server > /dev/null 2>&1 || true
-            echo "SCCACHE_LAUNCHER=" >> "$GITHUB_ENV"
-            echo "::warning::sccache unavailable (cache backend degraded), building without cache"
-          fi
-
       - name: Cache Conan packages
         uses: actions/cache@v4
         with:
@@ -60,8 +50,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-default-conan-
 
-      # FIX 2: --output-folder so conan writes generators into build/Release/,
-      # matching the path CMake is given below.
       - name: Conan install
         run: |
           conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
@@ -69,17 +57,14 @@ jobs:
       - name: List CMake presets (diagnostic)
         run: cmake --list-presets || true
 
-      # FIX 3: Compiler launchers are only set when sccache is actually healthy.
-      # Empty SCCACHE_LAUNCHER means the -D flags become "-D...=" which CMake
-      # treats as "no launcher", so the compiler is invoked directly.
       - name: Configure
         run: |
           cmake -S . -B build/Release -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER="${SCCACHE_LAUNCHER}" \
-            -DCMAKE_CXX_COMPILER_LAUNCHER="${SCCACHE_LAUNCHER}"
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build
         run: cmake --build build/Release
