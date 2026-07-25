@@ -28,8 +28,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Conan
-        run: pip install "conan>=2.0,<3"
+      - name: Install Build Tools & Conan
+        run: pip install "conan>=2.0,<3" ninja
 
       - name: Detect Conan profile
         run: conan profile detect --force
@@ -64,7 +64,7 @@ jobs:
         shell: pwsh
         run: |
           cmake -S . -B build/Release -G Ninja `
-            "-DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake" `
+            -DCMAKE_TOOLCHAIN_FILE="build/Release/generators/conan_toolchain.cmake" `
             -DCMAKE_BUILD_TYPE=Release `
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON `
             -DCMAKE_C_COMPILER_LAUNCHER=sccache `
