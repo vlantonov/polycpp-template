@@ -56,6 +56,9 @@ jobs:
           cd build
           conan install .. --build=missing -pr:b=default -s build_type=RelWithDebInfo
 
+      - name: List CMake presets (diagnostic)
+        run: cmake --list-presets || true
+
       - name: Configure
         run: |
           SAN_FLAG=""
@@ -65,7 +68,8 @@ jobs:
             tsan) SAN_FLAG="-DPOLYCPP_ENABLE_TSAN=ON" ;;
             *) echo "Unknown sanitizer" && exit 1 ;;
           esac
-          cmake --preset conan-relwithdebinfo \
+          cmake -S . -B build/RelWithDebInfo -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=build/RelWithDebInfo/generators/conan_toolchain.cmake \
             -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \

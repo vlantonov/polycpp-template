@@ -22,10 +22,16 @@ cd my-project
 mkdir build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=Release
 cd ..
-cmake --preset conan-release -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+cmake -S . -B build/Release -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+	-DPOLYCPP_WARNINGS_AS_ERRORS=ON
 cmake --build build/Release
 ctest --test-dir build/Release --output-on-failure
 ```
+
+Conan-generated preset names can vary by environment and generator (for
+example, `conan-release` vs `conan-default`), so this repo prefers explicit
+`-DCMAKE_TOOLCHAIN_FILE=...` configure commands in CI and docs.
 
 To add your own subproject, create a new `projects/<name>/` directory with its
 own target(s), tests, and install rules.
@@ -61,14 +67,16 @@ From the repository root:
 mkdir -p build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=Release
 cd ..
-cmake --preset conan-release
+cmake -S . -B build/Release -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake
 cmake --build build/Release
 ```
 
 For CI-strict local verification, configure with clang and warnings-as-errors:
 
 ```bash
-cmake --preset conan-release \
+cmake -S . -B build/Release -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
 	-DPOLYCPP_WARNINGS_AS_ERRORS=ON \
 	-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake --build build/Release

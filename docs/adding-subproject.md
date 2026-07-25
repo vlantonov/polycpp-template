@@ -124,11 +124,17 @@ version to conanfile.txt.
 
 ## 8. Run local verification
 
+Conan-generated preset names can vary by environment and generator (for
+example, `conan-release` vs `conan-default`), so use explicit toolchain
+configure commands in automation and portable docs.
+
 ```bash
 mkdir -p build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=Release
 cd ..
-cmake --preset conan-release -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+cmake -S . -B build/Release -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+  -DPOLYCPP_WARNINGS_AS_ERRORS=ON
 cmake --build build/Release
 ctest --test-dir build/Release --output-on-failure
 ```

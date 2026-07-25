@@ -3,6 +3,10 @@
 Use sanitizers for memory/thread/UB bug detection during local validation.
 Configure each run as RelWithDebInfo.
 
+Conan-generated preset names can vary by environment and generator (for
+example, `conan-relwithdebinfo` vs `conan-default`), so this doc uses explicit
+`-DCMAKE_TOOLCHAIN_FILE=...` configure commands.
+
 ## Local invocation
 
 AddressSanitizer (ASan):
@@ -11,7 +15,9 @@ AddressSanitizer (ASan):
 mkdir -p build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=RelWithDebInfo
 cd ..
-cmake --preset conan-relwithdebinfo -DPOLYCPP_ENABLE_ASAN=ON
+cmake -S . -B build/RelWithDebInfo -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/RelWithDebInfo/generators/conan_toolchain.cmake \
+	-DPOLYCPP_ENABLE_ASAN=ON
 cmake --build build/RelWithDebInfo
 ASAN_OPTIONS=abort_on_error=1 ctest --test-dir build/RelWithDebInfo --output-on-failure
 ```
@@ -22,7 +28,9 @@ UndefinedBehaviorSanitizer (UBSan):
 mkdir -p build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=RelWithDebInfo
 cd ..
-cmake --preset conan-relwithdebinfo -DPOLYCPP_ENABLE_UBSAN=ON
+cmake -S . -B build/RelWithDebInfo -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/RelWithDebInfo/generators/conan_toolchain.cmake \
+	-DPOLYCPP_ENABLE_UBSAN=ON
 cmake --build build/RelWithDebInfo
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ctest --test-dir build/RelWithDebInfo --output-on-failure
 ```
@@ -33,7 +41,9 @@ ThreadSanitizer (TSan):
 mkdir -p build && cd build
 conan install .. --build=missing -pr:b=default -s build_type=RelWithDebInfo
 cd ..
-cmake --preset conan-relwithdebinfo -DPOLYCPP_ENABLE_TSAN=ON
+cmake -S . -B build/RelWithDebInfo -G Ninja \
+	-DCMAKE_TOOLCHAIN_FILE=build/RelWithDebInfo/generators/conan_toolchain.cmake \
+	-DPOLYCPP_ENABLE_TSAN=ON
 cmake --build build/RelWithDebInfo
 TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build/RelWithDebInfo --output-on-failure
 ```

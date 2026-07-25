@@ -36,8 +36,15 @@ cd ..
 
 2. Configure strict clang build.
 
+Conan-generated preset names can vary by environment and generator (for
+example, `conan-release` vs `conan-default`), so use the explicit toolchain
+configure form for portability.
+
 ```bash
-cmake --preset conan-release -DPOLYCPP_WARNINGS_AS_ERRORS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake -S . -B build/Release -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
+  -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 ```
 
 3. Build succeeds.
