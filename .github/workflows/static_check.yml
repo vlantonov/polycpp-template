@@ -9,9 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  SCCACHE_GHA_ENABLED: "true"
-
 jobs:
   clang-format:
     runs-on: ubuntu-24.04
@@ -50,6 +47,10 @@ jobs:
     permissions:
       contents: read
       actions: write
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+      SCCACHE_STARTUP_TIMEOUT: "60"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,41 +70,14 @@ jobs:
         run: conan profile detect --force
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Start sccache server
+      - name: Verify sccache daemon (fallback to local cache)
         run: |
-          if sccache --start-server; then
-            echo "SCCACHE_C_LAUNCHER=sccache"   >> "$GITHUB_ENV"
-            echo "SCCACHE_CXX_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          else
-            echo "SCCACHE_C_LAUNCHER="   >> "$GITHUB_ENV"
-            echo "SCCACHE_CXX_LAUNCHER=" >> "$GITHUB_ENV"
-            echo "::warning::sccache server failed to start (GHA cache unavailable), building without cache"
+          if ! sccache --show-stats > /dev/null 2>&1; then
+            echo "sccache daemon not running, restarting with local cache"
+            SCCACHE_GHA_ENABLED=false sccache --start-server || true
           fi
-
-      - name: Configure (gcc)
-        if: matrix.compiler == 'gcc'
-        run: |
-          cmake -S . -B build/Release -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
-            ${{ env.SCCACHE_C_LAUNCHER   != '' && format('-DCMAKE_C_COMPILER_LAUNCHER={0}',   env.SCCACHE_C_LAUNCHER)   || '' }} \
-            ${{ env.SCCACHE_CXX_LAUNCHER != '' && format('-DCMAKE_CXX_COMPILER_LAUNCHER={0}', env.SCCACHE_CXX_LAUNCHER) || '' }}
-
-      - name: Configure (clang)
-        if: matrix.compiler == 'clang'
-        run: |
-          cmake -S . -B build/Release -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            ${{ env.SCCACHE_C_LAUNCHER   != '' && format('-DCMAKE_C_COMPILER_LAUNCHER={0}',   env.SCCACHE_C_LAUNCHER)   || '' }} \
-            ${{ env.SCCACHE_CXX_LAUNCHER != '' && format('-DCMAKE_CXX_COMPILER_LAUNCHER={0}', env.SCCACHE_CXX_LAUNCHER) || '' }}
-
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -115,12 +89,7 @@ jobs:
 
       - name: Conan install
         run: |
-          mkdir -p build
-          cd build
-          conan install .. --build=missing -pr:b=default -s build_type=Release
-
-      - name: List CMake presets (diagnostic)
-        run: cmake --list-presets || true
+          conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
 
       - name: Configure
         run: |
@@ -142,4 +111,4 @@ jobs:
 
       - name: sccache stats
         if: always()
-        run: sccache --show-stats
+        run: sccache --show-stats || true
