@@ -42,6 +42,14 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.7
 
+      - name: Start sccache server
+        shell: bash
+        run: |
+          if ! sccache --start-server; then
+            echo "SCCACHE_DISABLED=true" >> "$GITHUB_ENV"
+            echo "::warning::sccache server failed to start (GHA cache unavailable), building without cache"
+          fi
+
       - name: Cache Conan packages
         uses: actions/cache@v4
         with:
