@@ -40,7 +40,7 @@ jobs:
         run: conan profile detect --force
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Start sccache server
         run: |

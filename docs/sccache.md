@@ -22,7 +22,7 @@ Use this to inspect cache hit-rate and compile volume.
 
 ## CI backend (default)
 
-In GitHub Actions, this template uses mozilla-actions/sccache-action@v0.0.7.
+In GitHub Actions, this template uses mozilla-actions/sccache-action@v0.0.9.
 That action enables the GitHub Actions cache backend by exporting:
 - SCCACHE_GHA_ENABLED=true
 - ACTIONS_CACHE_URL
