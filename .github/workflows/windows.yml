@@ -21,34 +21,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Ninja
-        run: choco install ninja --yes
+      # Move Python-based installs before MSVC setup so pip/conan
+      # are on PATH before the MSVC env snapshot is taken.
+      - name: Install Ninja and Conan
+        run: |
+          pip install ninja "conan>=2.0,<3"
+        shell: pwsh
 
-      - name: Install Conan
-        run: python -m pip install "conan>=2.0,<3"
+      # ilammy/msvc-dev-cmd writes env vars into GITHUB_ENV so they
+      # persist across ALL subsequent steps regardless of shell.
+      # arch: amd64 makes the target explicit.
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
 
       - name: Detect Conan profile
+        # Run after MSVC env is in GITHUB_ENV so Conan sees cl.exe
         run: conan profile detect --force
-        shell: bash
+        shell: pwsh
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.7
 
       - name: Start sccache server
-        shell: bash
         run: |
-          if ! sccache --start-server; then
-            echo "SCCACHE_DISABLED=true" >> "$GITHUB_ENV"
-            echo "::warning::sccache server failed to start (GHA cache unavailable), building without cache"
-          fi
+          if (-not (sccache --start-server)) {
+            echo "SCCACHE_DISABLED=true" >> $env:GITHUB_ENV
+            Write-Warning "sccache server failed to start, building without cache"
+          }
+        shell: pwsh
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -59,33 +66,34 @@ jobs:
             ${{ runner.os }}-default-conan-
 
       - name: Conan install
-        shell: bash
         run: |
           conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
+        shell: pwsh
 
       - name: List CMake presets (diagnostic)
-        shell: bash
-        run: cmake --list-presets || true
+        run: cmake --list-presets
+        shell: pwsh
+        continue-on-error: true
 
       - name: Configure
-        shell: bash
         run: |
-          cmake -S . -B build/Release -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW \
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+          cmake -S . -B build/Release -G Ninja `
+            -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        shell: pwsh
 
       - name: Build
-        shell: bash
         run: cmake --build build/Release
+        shell: pwsh
 
       - name: Test
-        shell: bash
         run: ctest --test-dir build/Release --output-on-failure
+        shell: pwsh
 
       - name: sccache stats
         if: always()
-        shell: bash
         run: sccache --show-stats
+        shell: pwsh
