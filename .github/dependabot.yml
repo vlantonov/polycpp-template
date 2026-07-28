@@ -1,0 +1,59 @@
+# .github/dependabot.yml
+#
+# Dependency update configuration for polycpp-template.
+#
+# Ecosystems tracked:
+#   github-actions — all five CI workflow files under .github/workflows/
+#   docker         — Dockerfile.dev (ubuntu:24.04 base image)
+#
+# Not tracked (no native Dependabot support):
+#   conan          — spdlog/1.14.1, gtest/1.14.0 in conanfile.txt
+#                    Pin updates must be done manually or via a conan-bump
+#                    script / Renovate with a custom manager.
+#
+# Scheduling rationale:
+#   Weekly on Monday is a common choice for C++ infra repos — frequent enough
+#   to stay current, infrequent enough not to flood the PR queue.
+
+version: 2
+
+updates:
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"          # scans .github/workflows/*.yml automatically
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Sofia"
+    # Group all action bumps into a single PR per cycle so the compiler-matrix
+    # workflows don't each generate an individual pull request.
+    groups:
+      github-actions-deps:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
+    # Keep PR titles readable in the vlantonov curated style.
+    pull-request-branch-name:
+      separator: "/"
+
+  # ── Docker ────────────────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/"          # picks up Dockerfile.dev at the repo root
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Sofia"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "build(deps)"
+    pull-request-branch-name:
+      separator: "/"
