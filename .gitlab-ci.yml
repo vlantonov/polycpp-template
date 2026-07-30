@@ -1,0 +1,280 @@
+# GitLab CI/CD pipeline for polycpp-template
+# https://github.com/vlantonov/polycpp-template
+#
+# Translated 1:1 (as closely as GitLab CI allows) from the project's actual
+# GitHub Actions workflows: ubuntu.yml, macos.yml, sanitizers.yml,
+# static_check.yml, package.yml.
+#
+# Notable substitutions (GitLab has no direct equivalent of the GitHub-only
+# pieces used in these workflows):
+#   - mozilla-actions/sccache-action (GHA cache backend) -> sccache installed
+#     from its GitHub release binary, using local-disk caching persisted via
+#     GitLab CI `cache:`. Functionally similar, but not the GHA cache backend.
+#   - actions/cache@v4 (~/.conan2/p) -> GitLab CI `cache:` keyed on conanfile.txt.
+#   - GitHub matrix strategy -> GitLab `parallel: matrix:`.
+#   - softprops/action-gh-release -> GitLab's native `release:` keyword.
+#   - windows.yml was not provided, so no Windows job is included here; send
+#     its contents if you'd like it added.
+
+stages:
+  - static-check
+  - build
+  - sanitize
+  - package
+
+variables:
+  CONAN_HOME: "$CI_PROJECT_DIR/.conan2"
+  SCCACHE_DIR: "$CI_PROJECT_DIR/.sccache"
+  SCCACHE_CACHE_SIZE: "2G"
+  SCCACHE_VERSION: "0.8.2"
+
+.install_sccache: &install_sccache
+  - curl -fsSL -o /tmp/sccache.tar.gz "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+  - tar -xzf /tmp/sccache.tar.gz -C /tmp
+  - install -m 755 /tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache
+  - sccache --start-server || true
+
+.install_conan: &install_conan
+  - pip3 install --break-system-packages "conan>=2.0,<3"
+  - conan profile detect --force
+
+# ---------------------------------------------------------------------------
+# Static Check — mirrors static_check.yml (3 independent jobs)
+# ---------------------------------------------------------------------------
+static-check:clang-format:
+  stage: static-check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends clang-format-18 git
+  script:
+    - git ls-files '*.cpp' '*.hpp' '*.c' '*.h' | xargs -r clang-format-18 --dry-run --Werror
+
+static-check:cppcheck:
+  stage: static-check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends cppcheck
+  script:
+    - >
+      find projects -type d \( -name include -o -name src -o -name tests \) -print0 |
+      xargs -0 cppcheck --enable=warning,style,performance,portability
+      --error-exitcode=1 --suppress=missingIncludeSystem --inline-suppr
+
+static-check:clang-tidy:
+  stage: static-check
+  image: ubuntu:24.04
+  allow_failure: true
+  cache:
+    key:
+      files: [conanfile.txt]
+      prefix: clang-tidy-conan
+    paths:
+      - .conan2/p
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends ninja-build clang clang-tidy python3 python3-pip curl ca-certificates
+    - *install_conan
+    - *install_sccache
+  script:
+    - conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
+    - cmake -S . -B build/Release -G Ninja
+        -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake
+        -DCMAKE_BUILD_TYPE=Release
+        -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+        -DPOLYCPP_ENABLE_CLANG_TIDY=ON
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+        -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - cmake --build build/Release
+    - ctest --test-dir build/Release --output-on-failure
+  after_script:
+    - sccache --show-stats || true
+
+# ---------------------------------------------------------------------------
+# Ubuntu — mirrors ubuntu.yml (gcc / clang matrix)
+# ---------------------------------------------------------------------------
+.ubuntu_build:
+  stage: build
+  image: ubuntu:24.04
+  cache:
+    - key:
+        files: [conanfile.txt]
+        prefix: "$CI_JOB_NAME"
+      paths:
+        - .conan2/p
+    - key: "$CI_JOB_NAME-sccache"
+      paths:
+        - .sccache/
+  script:
+    - conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
+    - cmake --list-presets || true
+    - cmake -S . -B build/Release -G Ninja
+        -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake
+        -DCMAKE_BUILD_TYPE=Release
+        -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+        -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
+        -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - cmake --build build/Release
+    - ctest --test-dir build/Release --output-on-failure
+  after_script:
+    - sccache --show-stats || true
+
+build:gcc:
+  extends: .ubuntu_build
+  variables:
+    CC: gcc
+    CXX: g++
+  before_script:
+    # ubuntu:24.04 is a minimal image, unlike the ubuntu-24.04 GitHub runner,
+    # so build-essential is added here to provide gcc/g++.
+    - apt-get update -qq && apt-get install -y --no-install-recommends ninja-build clang cppcheck build-essential python3 python3-pip curl ca-certificates
+    - *install_conan
+    - *install_sccache
+
+build:clang:
+  extends: .ubuntu_build
+  variables:
+    CC: clang
+    CXX: clang++
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends ninja-build clang cppcheck python3 python3-pip curl ca-certificates
+    - *install_conan
+    - *install_sccache
+
+# ---------------------------------------------------------------------------
+# macOS — mirrors macos.yml
+# Requires a GitLab.com SaaS macOS runner (or a self-hosted macOS runner
+# tagged to match); remove this job if neither is available to you.
+# ---------------------------------------------------------------------------
+build:macos:
+  stage: build
+  tags:
+    - saas-macos-medium-m1
+  image: macos-14-xcode-15
+  cache:
+    key:
+      files: [conanfile.txt]
+      prefix: macos-conan
+    paths:
+      - .conan2/p
+  before_script:
+    - brew install ninja conan sccache
+    - conan profile detect --force
+  script:
+    - conan install . --output-folder=build/Release --build=missing -pr:b=default -s build_type=Release
+    - cmake --list-presets || true
+    - cmake -S . -B build/Release -G Ninja
+        -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake
+        -DCMAKE_BUILD_TYPE=Release
+        -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+        -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - cmake --build build/Release
+    - ctest --test-dir build/Release --output-on-failure
+  after_script:
+    - sccache --show-stats || true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Sanitizers — mirrors sanitizers.yml (asan / ubsan / tsan matrix, clang, RelWithDebInfo)
+# ---------------------------------------------------------------------------
+sanitize:
+  stage: sanitize
+  image: ubuntu:24.04
+  parallel:
+    matrix:
+      - SANITIZER: [asan, ubsan, tsan]
+  cache:
+    key:
+      files: [conanfile.txt]
+      prefix: "sanitize-$SANITIZER"
+    paths:
+      - .conan2/p
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends ninja-build clang python3 python3-pip curl ca-certificates
+    - *install_conan
+    - *install_sccache
+  script:
+    - conan install . --output-folder=build/RelWithDebInfo --build=missing -pr:b=default -s build_type=RelWithDebInfo
+    - cmake --list-presets || true
+    - |
+      case "$SANITIZER" in
+        asan) SAN_FLAG="-DPOLYCPP_ENABLE_ASAN=ON" ;;
+        ubsan) SAN_FLAG="-DPOLYCPP_ENABLE_UBSAN=ON" ;;
+        tsan) SAN_FLAG="-DPOLYCPP_ENABLE_TSAN=ON" ;;
+        *) echo "Unknown sanitizer" && exit 1 ;;
+      esac
+      cmake -S . -B build/RelWithDebInfo -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=build/RelWithDebInfo/generators/conan_toolchain.cmake \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DPOLYCPP_WARNINGS_AS_ERRORS=ON \
+        -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+        "$SAN_FLAG"
+    - cmake --build build/RelWithDebInfo
+    - |
+      case "$SANITIZER" in
+        asan) export ASAN_OPTIONS='abort_on_error=1:strict_string_checks=1:detect_leaks=1:halt_on_error=1' ;;
+        ubsan) export UBSAN_OPTIONS='print_stacktrace=1:halt_on_error=1' ;;
+        tsan) export TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' ;;
+      esac
+      ctest --test-dir build/RelWithDebInfo --output-on-failure
+  after_script:
+    - sccache --show-stats || true
+
+# ---------------------------------------------------------------------------
+# Package — mirrors package.yml (tag push v*.*.* or manual dispatch)
+# ---------------------------------------------------------------------------
+package:linux:
+  stage: package
+  image: ubuntu:24.04
+  cache:
+    key:
+      files: [conanfile.txt]
+      prefix: package-conan
+    paths:
+      - .conan2/p
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends ninja-build clang cppcheck rpm dpkg-dev python3 python3-pip curl ca-certificates
+    - *install_conan
+    - *install_sccache
+  script:
+    - mkdir -p build
+    - cd build && conan install .. --build=missing -pr:b=default -s build_type=Release && cd ..
+    - cmake --list-presets || true
+    - cmake -S . -B build/Release -G Ninja
+        -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake
+        -DCMAKE_BUILD_TYPE=Release
+        -DPOLYCPP_WARNINGS_AS_ERRORS=ON
+        -DPOLYCPP_ENABLE_PACKAGING=ON
+        -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - cmake --build build/Release
+    - cd build/Release && cpack -G "DEB;RPM" -V && cd ../..
+    - ls -la build/Release/*.deb build/Release/*.rpm
+  after_script:
+    - sccache --show-stats || true
+  artifacts:
+    name: "polycpp-packages"
+    paths:
+      - build/Release/*.deb
+      - build/Release/*.rpm
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+release:
+  stage: package
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: package:linux
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - echo "Creating release for $CI_COMMIT_TAG"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    description: "Release $CI_COMMIT_TAG"
+    assets:
+      links:
+        - name: "polycpp-packages"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=package:linux"
