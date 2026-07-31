@@ -71,7 +71,7 @@ static-check:clang-tidy:
     paths:
       - .conan2/p
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build clang clang-tidy python3 python3-pip curl ca-certificates
+    - apt-get update -qq && apt-get install -y --no-install-recommends cmake make ninja-build clang clang-tidy python3 python3-pip curl ca-certificates
     - *install_conan
     - *install_sccache
   script:
@@ -135,7 +135,7 @@ build:clang:
     CC: clang
     CXX: clang++
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build clang cppcheck python3 python3-pip curl ca-certificates
+    - apt-get update -qq && apt-get install -y --no-install-recommends cmake make ninja-build clang cppcheck python3 python3-pip curl ca-certificates
     - *install_conan
     - *install_sccache
 
@@ -155,7 +155,7 @@ sanitize:
     paths:
       - .conan2/p
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build clang python3 python3-pip curl ca-certificates
+    - apt-get update -qq && apt-get install -y --no-install-recommends cmake make ninja-build clang python3 python3-pip curl ca-certificates
     - *install_conan
     - *install_sccache
   script:
@@ -199,7 +199,7 @@ package:linux:
     paths:
       - .conan2/p
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build clang cppcheck rpm dpkg-dev python3 python3-pip curl ca-certificates
+    - apt-get update -qq && apt-get install -y --no-install-recommends cmake make ninja-build clang cppcheck rpm dpkg-dev python3 python3-pip curl ca-certificates
     - *install_conan
     - *install_sccache
   script:
