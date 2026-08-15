@@ -70,7 +70,7 @@ jobs:
         run: conan profile detect --force
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Verify sccache daemon (fallback to local cache)
         run: |
